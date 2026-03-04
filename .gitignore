@@ -1,3 +1,61 @@
+# Build outputs
+build/
+*.elf
+*.hex
+*.bin
+*.map
+*.o
+*.d
+*.lst
+*.su
+
+# Debug files
+*.axf
+*.out
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+*.egg-info/
+dist/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Cursor
+.cursor/
+
+# CLion (you have partial, add full)
+cmake-build-*/
+.idea/
+
+# Vim/Emacs
+*.swp
+*.swo
+*~
+\#*\#
+
+# Logs
+*.log
+log/
+logs/
+
+# Temp
+*.tmp
+*.temp
+
 CMakeLists.txt.user
 CMakeCache.txt
 CMakeFiles
