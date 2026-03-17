@@ -47,24 +47,6 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-CAN_HandleTypeDef hcan1;
-CAN_HandleTypeDef hcan2;
-CAN_HandleTypeDef hcan3;
-
-DAC_HandleTypeDef hdac;
-
-I2C_HandleTypeDef hi2c1;
-I2C_HandleTypeDef hi2c2;
-I2C_HandleTypeDef hi2c3;
-
-SPI_HandleTypeDef hspi4;
-SPI_HandleTypeDef hspi5;
-
-TIM_HandleTypeDef htim8;
-
-UART_HandleTypeDef huart4;
-UART_HandleTypeDef huart7;
-UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
 

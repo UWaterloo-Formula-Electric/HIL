@@ -51,9 +51,6 @@ extern "C" {
 
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
-void HAL_MspInit(void);
-void SystemInit(void);
-void SystemCoreClockUpdate(void);
 
 /* USER CODE BEGIN EFP */
 
