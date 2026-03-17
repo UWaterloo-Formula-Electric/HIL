@@ -1,9 +1,9 @@
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
-  * @file    can.h
+  * @file    tim.h
   * @brief   This file contains all the function prototypes for
-  *          the can.c file
+  *          the tim.c file
   ******************************************************************************
   * @attention
   *
@@ -18,8 +18,8 @@
   */
 /* USER CODE END Header */
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __CAN_H__
-#define __CAN_H__
+#ifndef __TIM_H__
+#define __TIM_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,23 +32,19 @@ extern "C" {
 
 /* USER CODE END Includes */
 
-extern CAN_HandleTypeDef hcan1;
-
-extern CAN_HandleTypeDef hcan2;
-
-extern CAN_HandleTypeDef hcan3;
+extern TIM_HandleTypeDef htim8;
 
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
 
-void MX_CAN1_Init(void);
-void MX_CAN2_Init(void);
-void MX_CAN3_Init(void);
+void MX_TIM8_Init(void);
+
+void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 /* USER CODE BEGIN Prototypes */
-void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle);
-void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle);
+void HAL_TIM_PWM_MspInit(TIM_HandleTypeDef* tim_pwmHandle);
+void HAL_TIM_PWM_MspDeInit(TIM_HandleTypeDef* tim_pwmHandle);
 
 /* USER CODE END Prototypes */
 
@@ -56,5 +52,5 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle);
 }
 #endif
 
-#endif /* __CAN_H__ */
+#endif /* __TIM_H__ */
 

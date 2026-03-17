@@ -1,9 +1,9 @@
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
-  * @file    can.h
+  * @file    usart.h
   * @brief   This file contains all the function prototypes for
-  *          the can.c file
+  *          the usart.c file
   ******************************************************************************
   * @attention
   *
@@ -18,8 +18,8 @@
   */
 /* USER CODE END Header */
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __CAN_H__
-#define __CAN_H__
+#ifndef __USART_H__
+#define __USART_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,23 +32,23 @@ extern "C" {
 
 /* USER CODE END Includes */
 
-extern CAN_HandleTypeDef hcan1;
+extern UART_HandleTypeDef huart4;
 
-extern CAN_HandleTypeDef hcan2;
+extern UART_HandleTypeDef huart7;
 
-extern CAN_HandleTypeDef hcan3;
+extern UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
 
-void MX_CAN1_Init(void);
-void MX_CAN2_Init(void);
-void MX_CAN3_Init(void);
+void MX_UART4_Init(void);
+void MX_UART7_Init(void);
+void MX_USART3_UART_Init(void);
 
 /* USER CODE BEGIN Prototypes */
-void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle);
-void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle);
+void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle);
+void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle);
 
 /* USER CODE END Prototypes */
 
@@ -56,5 +56,5 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle);
 }
 #endif
 
-#endif /* __CAN_H__ */
+#endif /* __USART_H__ */
 

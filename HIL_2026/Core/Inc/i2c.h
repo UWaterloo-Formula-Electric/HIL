@@ -1,9 +1,9 @@
 /* USER CODE BEGIN Header */
 /**
   ******************************************************************************
-  * @file    can.h
+  * @file    i2c.h
   * @brief   This file contains all the function prototypes for
-  *          the can.c file
+  *          the i2c.c file
   ******************************************************************************
   * @attention
   *
@@ -18,8 +18,8 @@
   */
 /* USER CODE END Header */
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __CAN_H__
-#define __CAN_H__
+#ifndef __I2C_H__
+#define __I2C_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,23 +32,23 @@ extern "C" {
 
 /* USER CODE END Includes */
 
-extern CAN_HandleTypeDef hcan1;
+extern I2C_HandleTypeDef hi2c1;
 
-extern CAN_HandleTypeDef hcan2;
+extern I2C_HandleTypeDef hi2c2;
 
-extern CAN_HandleTypeDef hcan3;
+extern I2C_HandleTypeDef hi2c3;
 
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
 
-void MX_CAN1_Init(void);
-void MX_CAN2_Init(void);
-void MX_CAN3_Init(void);
+void MX_I2C1_Init(void);
+void MX_I2C2_Init(void);
+void MX_I2C3_Init(void);
 
 /* USER CODE BEGIN Prototypes */
-void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle);
-void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle);
+void HAL_I2C_MspInit(I2C_HandleTypeDef* i2cHandle);
+void HAL_I2C_MspDeInit(I2C_HandleTypeDef* i2cHandle);
 
 /* USER CODE END Prototypes */
 
@@ -56,5 +56,5 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle);
 }
 #endif
 
-#endif /* __CAN_H__ */
+#endif /* __I2C_H__ */
 
