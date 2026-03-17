@@ -22,6 +22,62 @@
 #include "gpio.h"
 
 /* USER CODE BEGIN 0 */
+typedef struct
+{
+  GPIO_TypeDef *port;
+  uint16_t pin;
+  bool is_active_low_button;
+} HIL_VCU_GpioDescriptor;
+
+static bool HIL_VCU_GetDescriptor(HIL_VCU_GpioSignal signal,
+                                  HIL_VCU_GpioDescriptor *descriptor)
+{
+  if (descriptor == 0)
+  {
+    return false;
+  }
+
+  switch (signal)
+  {
+    case HIL_VCU_SIGNAL_BTN_HV:
+      descriptor->port = HIL_VCU_BTN_HV_GPIO_Port;
+      descriptor->pin = HIL_VCU_BTN_HV_Pin;
+      descriptor->is_active_low_button = true;
+      return true;
+    case HIL_VCU_SIGNAL_BTN_EM:
+      descriptor->port = HIL_VCU_BTN_EM_GPIO_Port;
+      descriptor->pin = HIL_VCU_BTN_EM_Pin;
+      descriptor->is_active_low_button = true;
+      return true;
+    case HIL_VCU_SIGNAL_BTN_TC:
+      descriptor->port = HIL_VCU_BTN_TC_GPIO_Port;
+      descriptor->pin = HIL_VCU_BTN_TC_Pin;
+      descriptor->is_active_low_button = true;
+      return true;
+    case HIL_VCU_SIGNAL_BTN_ENDUR:
+      descriptor->port = HIL_VCU_BTN_ENDUR_GPIO_Port;
+      descriptor->pin = HIL_VCU_BTN_ENDUR_Pin;
+      descriptor->is_active_low_button = true;
+      return true;
+    case HIL_VCU_SIGNAL_BUT1:
+      descriptor->port = HIL_VCU_BUT1_GPIO_Port;
+      descriptor->pin = HIL_VCU_BUT1_Pin;
+      descriptor->is_active_low_button = false;
+      return true;
+    case HIL_VCU_SIGNAL_BUT2:
+      descriptor->port = HIL_VCU_BUT2_GPIO_Port;
+      descriptor->pin = HIL_VCU_BUT2_Pin;
+      descriptor->is_active_low_button = false;
+      return true;
+    case HIL_VCU_SIGNAL_BUT3:
+      descriptor->port = HIL_VCU_BUT3_GPIO_Port;
+      descriptor->pin = HIL_VCU_BUT3_Pin;
+      descriptor->is_active_low_button = false;
+      return true;
+    default:
+      return false;
+  }
+}
 
 /* USER CODE END 0 */
 
@@ -198,5 +254,63 @@ void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 2 */
+void HIL_VCU_GPIO_Init(void)
+{
+  /* default to high - buttons*/
+  (void)HIL_VCU_ReleaseAllButtons();
+}
+
+bool HIL_VCU_WriteRaw(HIL_VCU_GpioSignal signal, GPIO_PinState state)
+{
+  HIL_VCU_GpioDescriptor descriptor;
+
+  if (!HIL_VCU_GetDescriptor(signal, &descriptor))
+  {
+    return false;
+  }
+
+  HAL_GPIO_WritePin(descriptor.port, descriptor.pin, state);
+  return true;
+}
+
+bool HIL_VCU_ReadRaw(HIL_VCU_GpioSignal signal, GPIO_PinState *state)
+{
+  HIL_VCU_GpioDescriptor descriptor;
+
+  if ((state == 0) || !HIL_VCU_GetDescriptor(signal, &descriptor))
+  {
+    return false;
+  }
+
+  *state = HAL_GPIO_ReadPin(descriptor.port, descriptor.pin);
+  return true;
+}
+
+bool HIL_VCU_SetButtonPressed(HIL_VCU_GpioSignal signal, bool pressed)
+{
+  HIL_VCU_GpioDescriptor descriptor;
+  GPIO_PinState state;
+
+  if (!HIL_VCU_GetDescriptor(signal, &descriptor) ||
+      !descriptor.is_active_low_button)
+  {
+    return false;
+  }
+
+  state = pressed ? GPIO_PIN_RESET : GPIO_PIN_SET;
+  return HIL_VCU_WriteRaw(signal, state);
+}
+
+bool HIL_VCU_ReleaseAllButtons(void)
+{
+  bool ok = true;
+
+  ok = HIL_VCU_SetButtonPressed(HIL_VCU_SIGNAL_BTN_HV, false) && ok;
+  ok = HIL_VCU_SetButtonPressed(HIL_VCU_SIGNAL_BTN_EM, false) && ok;
+  ok = HIL_VCU_SetButtonPressed(HIL_VCU_SIGNAL_BTN_TC, false) && ok;
+  ok = HIL_VCU_SetButtonPressed(HIL_VCU_SIGNAL_BTN_ENDUR, false) && ok;
+
+  return ok;
+}
 
 /* USER CODE END 2 */
