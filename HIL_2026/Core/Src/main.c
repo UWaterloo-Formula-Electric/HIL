@@ -74,6 +74,7 @@ UART_HandleTypeDef huart3;
 void SystemClock_Config(void);
 static void MPU_Config(void);
 /* USER CODE BEGIN PFP */
+__weak void userInit() {}
 
 /* USER CODE END PFP */
 

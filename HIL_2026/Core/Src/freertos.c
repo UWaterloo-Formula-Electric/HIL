@@ -25,7 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "can_types.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,13 +45,28 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
+osThreadId canSimTaskHandle;
+osThreadId canLogTaskHandle;
+osThreadId cliTaskHandle;
+osThreadId outputTaskHandle;
+osThreadId logDrainTaskHandle;
 
+osMessageQId xCanTxQueue;
+osMessageQId xOutputQueue;
+
+HIL_RxLogEntry_t logRing[LOG_RING_SIZE];
+volatile uint32_t logRingHead = 0;
+volatile uint32_t logRingTail = 0;
 /* USER CODE END Variables */
 osThreadId defaultTaskHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-
+extern void canSimTask (void const *argument);
+extern void canLogTask (void const *argument);
+extern void hilCliTask (void const *argument);
+extern void outputTask (void const *argument);
+extern void logDrainTask (void const *argument);
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void const * argument);
@@ -110,15 +125,35 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
+  osMessageQDef(canTxQueue, 16, HIL_CanCmd_t);
+  xCanTxQueue = osMessageCreate(osMessageQ(canTxQueue), NULL);
+
+  osMessageQDef(outputQueue, 8, HIL_OutputCmd_t);
+  xOutputQueue = osMessageCreate(osMessageQ(outputQueue), NULL);
+
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
   /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 256);
-  defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+  osThreadDef(StartDefaultTask, osPriorityNormal, 0, 256);
+  defaultTaskHandle = osThreadCreate(osThread(StartDefaultTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+  osThreadDef(canSimTask, osPriorityRealtime, 0, 1000);
+  canSimTaskHandle = osThreadCreate(osThread(canSimTask), NULL);
+
+  osThreadDef(canLogTask, osPriorityNormal, 0, 2000);
+  canLogTaskHandle = osThreadCreate(osThread(canLogTask), NULL);
+
+  osThreadDef(hilCliTask, osPriorityLow, 0, 1000);
+  cliTaskHandle = osThreadCreate(osThread(hilCliTask), NULL);
+
+  osThreadDef(outputTask, osPriorityNormal, 0, 500);
+  outputTaskHandle = osThreadCreate(osThread(outputTask), NULL);
+
+  osThreadDef(logDrainTask, osPriorityLow, 0, 500);
+  logDrainTaskHandle = osThreadCreate(osThread(logDrainTask), NULL);
   /* USER CODE END RTOS_THREADS */
 
 }
