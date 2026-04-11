@@ -3,12 +3,13 @@
 generate_can_signals.py
 =======================
 Reads 2024CAR.dbc (and optionally ChargerMessages.dbc) and generates
-C encode functions for every message.
+C encode functions for every message the VCU_F7 receives.
 
-The generated files (can_signals.c / can_signals.h) are compiled as
-ordinary source files in the HIL firmware.  canSimTask calls the encode
-functions, passes the resulting byte array to HIL_CAN_Transmit, and the
-CAN3 peripheral puts it on the bus.
+Approach matches the UWFE generateCANHeader.py:
+  - C bitfield struct per message (with FILLER fields for gaps)
+  - Value table enums for signals with choices
+  - encode_<Msg> packs physical values into the struct
+  - sendCAN_<Msg> calls HIL_CAN_Transmit internally
 
 Usage
 -----
@@ -28,202 +29,269 @@ Dependencies
 
 import cantools
 import argparse
-import textwrap
+import operator
 from pathlib import Path
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────
+# Type helpers
 
-def c_type(signal):
-    """Return the narrowest fixed-width C type for a signal's raw integer."""
-    bits   = signal.length
-    signed = signal.is_signed
-    if bits <= 8:
-        return "int8_t"  if signed else "uint8_t"
-    if bits <= 16:
-        return "int16_t" if signed else "uint16_t"
-    return "int32_t" if signed else "uint32_t"
+def raw_c_type(signal):
+    """C integer type for the signal's raw (unscaled) value inside the struct."""
+    if signal.is_signed:
+        return "int64_t"
+    return "uint64_t"
+
+def phys_c_type(signal):
+    """C type for the physical value passed to the encode function."""
+    if signal.scale is not None and signal.scale != 1:
+        return "float"
+    if signal.is_signed:
+        return "int64_t"
+    return "uint64_t"
 
 
-def safe_default(signal):
+# Struct generation (matches UWFE writeStructForMsg)
+
+def generate_struct(msg):
     """
-    Return a safe default raw value for a signal.
+    Generate a packed C bitfield struct for a message.
 
-    Most signals default to 0.  Signals that have a minimum > 0 (like
-    DTC_Severity which requires 1-4) get their minimum value so the
-    generated code compiles and runs without range errors.
-    """
-    if signal.minimum is not None and signal.minimum > 0:
-        return int(signal.minimum)
-    return 0
-
-
-def physical_to_raw_expr(signal, phys_var):
-    """
-    Return a C expression that converts a physical value variable to the
-    raw integer that gets packed into the CAN frame.
-
-        raw = (physical - offset) / scale
-
-    We use integer arithmetic where scale == 1 and offset == 0 (the common
-    case) to avoid pulling in floating-point on the MCU.
-    """
-    scale  = signal.scale  if signal.scale  is not None else 1
-    offset = signal.offset if signal.offset is not None else 0
-
-    if scale == 1 and offset == 0:
-        # Pure integer cast — no FP needed
-        return f"(int32_t)({phys_var})"
-    elif offset == 0:
-        return f"(int32_t)(({phys_var}) / ({scale}f))"
-    else:
-        return f"(int32_t)((({phys_var}) - ({offset}f)) / ({scale}f))"
-
-
-def pack_signal(signal, raw_var):
-    """
-    Return a list of C assignment lines that pack `raw_var` (an int32_t)
-    into the correct bit positions of data[].
-
-    All signals in 2024CAR.dbc are little-endian.  In the DBC little-endian
-    format the start bit is the LSB of the signal.  Bit N maps to:
-        byte  = N // 8
-        bit   = N %  8
+    Signals are sorted by start bit. Gaps between signals become FILLER
+    fields. This matches what UWFE's generateCANHeader.py produces and lets
+    the compiler handle all bit layout — no manual bit manipulation needed.
+    Mux-conditional signals (multiplexer_ids set) are included in the struct
+    using the stripped signal name; the mux selector itself is also included.
     """
     lines = []
-    start  = signal.start
-    length = signal.length
+    lines.append(f"struct {msg.name} {{")
 
-    for bit_offset in range(length):
-        abs_bit    = start + bit_offset
-        byte_idx   = abs_bit // 8
-        bit_in_byte = abs_bit % 8
-        lines.append(
-            f"    data[{byte_idx}] |= "
-            f"(uint8_t)(({raw_var} >> {bit_offset}) & 0x01u) << {bit_in_byte}u;"
-        )
-    return lines
+    signals = sorted(msg.signals, key=operator.attrgetter('start'))
+    pos = 0
+    seen_starts = set()
+    mux_count = 1
+
+    for sig in signals:
+        if sig.start in seen_starts:
+            continue
+        seen_starts.add(sig.start)
+
+        # Fill any gap before this signal
+        if sig.start > pos:
+            lines.append(f"    uint64_t FILLER_{pos} : {sig.start - pos};")
+
+        # Name: strip trailing digits for mux-conditional signals
+        name = sig.name
+        if sig.multiplexer_ids is not None:
+            import re
+            name = re.sub(r'\d+$', '', name) + str(mux_count)
+            mux_count += 1
+
+        if sig.is_signed:
+            lines.append(f"    int64_t  {name} : {sig.length};")
+        else:
+            lines.append(f"    uint64_t {name} : {sig.length};")
+
+        pos = sig.start + sig.length
+
+    # Pad to full message length
+    total_bits = msg.length * 8
+    if pos < total_bits:
+        lines.append(f"    uint64_t FILLER_END : {total_bits - pos};")
+
+    lines.append("};")
+    lines.append("")
+    return "\n".join(lines)
 
 
-# Per-message code generation
+# ── Value table enums (matches UWFE writeValueTableEnum) ─────────────────
+
+def generate_enum(signal):
+    """
+    Generate a C enum for a signal that has named values (choices).
+    Matches the UWFE approach: enum <SignalName>_Values { <Name> = <Value> }.
+    """
+    if not signal.choices:
+        return None
+    lines = []
+    lines.append(f"typedef enum {{")
+    for value, name in signal.choices.items():
+        safe_name = str(name).replace(' ', '_').replace('/', '_')
+        lines.append(f"    {signal.name}_{safe_name} = {value},")
+    lines.append(f"}} {signal.name}_Values;")
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ── Encode function (struct-based, matches UWFE approach) ─────────────────
 
 def generate_encode_fn(msg):
     """
-    Generate the full C encode function for one DBC message.
+    Generate an encode function that:
+      1. Takes physical signal values as arguments
+      2. Builds a zero-initialised struct instance
+      3. Assigns the raw (unscaled) value of each signal into the struct field
+      4. Memcpys the struct into the caller-supplied data[] array
 
-    Multiplexed signals (signals that only appear when a mux selector has a
-    specific value) are skipped — the HIL sends fixed, non-multiplexed frames.
-    The mux selector signal itself is included with a fixed value of 0.
+    Using memcpy instead of a pointer cast avoids strict-aliasing UB in C99.
+    The struct bitfield layout is identical to the UWFE approach.
 
-    The function signature uses physical-value types (float for scaled
-    signals, the appropriate integer type for unscaled signals).
+    Mux-conditional signals are excluded from the parameter list (the HIL
+    sends fixed non-mux frames). The mux selector field is set to 0.
     """
-    # Separate non-mux signals from mux signals
-    base_signals = [s for s in msg.signals
-                    if not s.multiplexer_ids]   # mux selectors + plain signals
-    mux_signals  = [s for s in msg.signals
-                    if s.multiplexer_ids]        # conditional mux signals
+    # Only base (non-mux-conditional) signals as parameters
+    base_sigs = [s for s in msg.signals if not s.multiplexer_ids]
+    # Mux selector signals are in base_sigs already (they have multiplexer_ids=None)
 
     fn_name = f"encode_{msg.name}"
-
-    # Build parameter list — use float for scaled signals, int type otherwise
-    params = []
-    for s in base_signals:
-        scale = s.scale if s.scale is not None else 1
-        if isinstance(scale, float) and scale != 1.0:
-            params.append(f"float {s.name}")
-        else:
-            params.append(f"{c_type(s)} {s.name}")
-
-    param_str = ", ".join(params) if params else "void"
+    params = ", ".join(
+        f"{phys_c_type(s)} {s.name}" for s in base_sigs
+    )
+    if not params:
+        params = "void"
 
     lines = []
     lines.append(f"/**")
-    lines.append(f" * @brief Encode {msg.name}")
-    lines.append(f" *        ID: 0x{msg.frame_id:08X}  Length: {msg.length} bytes")
-    if mux_signals:
-        lines.append(f" *        Note: {len(mux_signals)} multiplexed signal(s) omitted.")
-    lines.append(f" * @param data  Output byte array, must be {msg.length} bytes.")
+    lines.append(f" * @brief  Encode {msg.name}")
+    lines.append(f" *         ID: 0x{msg.frame_id:08X}  ({msg.frame_id})  Length: {msg.length}B")
+    lines.append(f" * @param  data  Output buffer, must be >= {msg.length} bytes")
 
-    for s in base_signals:
+    for s in base_sigs:
         scale  = s.scale  if s.scale  is not None else 1
         offset = s.offset if s.offset is not None else 0
-        lines.append(f" * @param {s.name}  Physical value  "
-                     f"[scale={scale}, offset={offset}, "
-                     f"{'signed' if s.is_signed else 'unsigned'}, "
-                     f"{s.length}bit]")
+        lines.append(
+            f" * @param  {s.name:<40} "
+            f"[scale={scale}, offset={offset}, "
+            f"{'signed' if s.is_signed else 'unsigned'}, {s.length}bit]"
+        )
     lines.append(f" */")
-    lines.append(f"void {fn_name}(uint8_t data[{msg.length}], {param_str})")
+    lines.append(f"void {fn_name}(uint8_t data[{msg.length}], {params})")
     lines.append("{")
-    lines.append(f"    memset(data, 0, {msg.length});")
+    lines.append(f"    struct {msg.name} frame = {{0}};")
     lines.append("")
 
-    for s in base_signals:
-        raw_var = f"raw_{s.name}"
-        phys_expr = physical_to_raw_expr(s, s.name)
-        lines.append(f"    /* {s.name}: start={s.start}, len={s.length} */")
-        lines.append(f"    int32_t {raw_var} = {phys_expr};")
-        lines += pack_signal(s, raw_var)
-        lines.append("")
+    for s in base_sigs:
+        scale  = s.scale  if s.scale  is not None else 1
+        offset = s.offset if s.offset is not None else 0
 
+        if scale == 1 and offset == 0:
+            # Integer signal — cast directly
+            raw_expr = f"({raw_c_type(s)})({s.name})"
+        elif offset == 0:
+            raw_expr = f"({raw_c_type(s)})(({s.name}) / ({scale}f))"
+        else:
+            raw_expr = f"({raw_c_type(s)})((({s.name}) - ({offset}f)) / ({scale}f))"
+
+        lines.append(f"    frame.{s.name} = {raw_expr};")
+
+    lines.append(f"    memcpy(data, &frame, {msg.length});")
     lines.append("}")
     return "\n".join(lines)
 
 
-def generate_header_decl(msg):
-    """Return the function prototype line for the header file."""
-    base_signals = [s for s in msg.signals if not s.multiplexer_ids]
+# ── sendCAN_ wrapper (matches UWFE writeMessageSendFunction) ──────────────
 
-    params = []
-    for s in base_signals:
-        scale = s.scale if s.scale is not None else 1
-        if isinstance(scale, float) and scale != 1.0:
-            params.append(f"float {s.name}")
-        else:
-            params.append(f"{c_type(s)} {s.name}")
+def generate_send_fn(msg):
+    """
+    Generate a sendCAN_<Msg>() function that calls HIL_CAN_Transmit.
 
-    param_str = ", ".join(params) if params else "void"
-    return f"void encode_{msg.name}(uint8_t data[{msg.length}], {param_str});"
+    The caller sets signal values in gHILState, then canSimTask calls
+    sendCAN_<Msg>(gHILState.field, ...) — this matches the UWFE pattern
+    where sendCAN_X() reads from global variables and calls sendCanMessage().
+
+    For the HIL the physical values come in as parameters rather than globals
+    so canSimTask controls exactly which values go out.
+    """
+    base_sigs = [s for s in msg.signals if not s.multiplexer_ids]
+    params = ", ".join(
+        f"{phys_c_type(s)} {s.name}" for s in base_sigs
+    )
+    if not params:
+        params = "void"
+
+    arg_names = ", ".join(s.name for s in base_sigs)
+
+    lines = []
+    lines.append(f"int sendCAN_{msg.name}({params})")
+    lines.append("{")
+    lines.append(f"    uint8_t data[{msg.length}];")
+    lines.append(f"    encode_{msg.name}(data, {arg_names});")
+    lines.append(
+        f"    return HIL_CAN_Transmit(&hcan3, "
+        f"0x{msg.frame_id:08X}UL, {msg.length}, data);"
+    )
+    lines.append("}")
+    return "\n".join(lines)
 
 
-def generate_id_defines(messages):
-    """Return a list of #define lines for every message ID."""
-    lines = ["/* Message IDs — 29-bit extended, from DBC */"]
-    for msg in messages:
-        define_name = f"CAN_ID_{msg.name.upper()}"
-        lines.append(f"#define {define_name:<55} 0x{msg.frame_id:08X}UL"
-                     f"  /* {msg.frame_id} decimal */")
-    return lines
+# ── Header declarations ───────────────────────────────────────────────────
+
+def generate_encode_decl(msg):
+    base_sigs = [s for s in msg.signals if not s.multiplexer_ids]
+    params = ", ".join(
+        f"{phys_c_type(s)} {s.name}" for s in base_sigs
+    ) or "void"
+    return f"void encode_{msg.name}(uint8_t data[{msg.length}], {params});"
+
+def generate_send_decl(msg):
+    base_sigs = [s for s in msg.signals if not s.multiplexer_ids]
+    params = ", ".join(
+        f"{phys_c_type(s)} {s.name}" for s in base_sigs
+    ) or "void"
+    return f"int sendCAN_{msg.name}({params});"
+
+def generate_id_define(msg):
+    return (
+        f"#define CAN_ID_{msg.name.upper():<50} "
+        f"0x{msg.frame_id:08X}UL  /* {msg.frame_id} */"
+    )
 
 
-# Main
+# ── Main ──────────────────────────────────────────────────────────────────
+
+# Default DBC directory — update this if your Data folder moves
+DEFAULT_DBC_DIR = r"C:\Users\Joeyl\OneDrive\Desktop\Coding Projects\UWFE\HIL\HIL_2026\Data"
+
+# DBC files to load by default when no paths are provided on the command line
+DEFAULT_DBC_FILE = "2024CAR.dbc"
+
+
 
 def main():
+    import os
+
     parser = argparse.ArgumentParser(
-        description="Generate HIL CAN encode functions from DBC files."
+        description="Generate HIL CAN encode/send functions from DBC files (VCU_F7 RX only)."
     )
     parser.add_argument(
-        "dbc", nargs="+",
-        help="One or more .dbc files to process (e.g. 2024CAR.dbc ChargerMessages.dbc)"
+        "dbc", nargs="*",
+        help=(
+            "DBC file paths. If omitted, defaults to 2024CAR.dbc and "
+            "ChargerMessages.dbc in the configured DEFAULT_DBC_DIR."
+        )
     )
+    parser.add_argument("--out-c", default="can_signals.c")
+    parser.add_argument("--out-h", default="can_signals.h")
     parser.add_argument(
-        "--out-c", default="can_signals.c",
-        help="Output C source file path (default: can_signals.c)"
-    )
-    parser.add_argument(
-        "--out-h", default="can_signals.h",
-        help="Output header file path (default: can_signals.h)"
+        "--dbc-dir", default=DEFAULT_DBC_DIR,
+        help="Directory containing DBC files (used when no dbc args are given)"
     )
     args = parser.parse_args()
 
-    # Load all DBC files, merge messages into one list
+    # If no DBC files given on command line, use the defaults from DEFAULT_DBC_DIR
+    if not args.dbc:
+        args.dbc = [
+            os.path.join(args.dbc_dir, DEFAULT_DBC_FILE)
+        ]
+        print(f"No DBC files specified — using defaults from: {args.dbc_dir}")
+
+    # Load and merge all DBC files
     all_messages = []
     for dbc_path in args.dbc:
         db = cantools.database.load_file(dbc_path)
         all_messages.extend(db.messages)
         print(f"Loaded {dbc_path}: {len(db.messages)} messages")
 
-    # Deduplicate by frame_id in case both DBCs share any IDs
+    # Deduplicate by frame_id
     seen_ids = set()
     unique_messages = []
     for msg in all_messages:
@@ -231,35 +299,88 @@ def main():
             seen_ids.add(msg.frame_id)
             unique_messages.append(msg)
 
-    total_signals = sum(len(m.signals) for m in unique_messages)
-    print(f"Total: {len(unique_messages)} unique messages, {total_signals} signals")
+    # Filter to VCU_F7 receivers only.
+    # Step 1: keep messages where at least one signal lists VCU_F7.
+    # Step 2: within each kept message, drop signals not received by VCU_F7
+    #         so encode functions only pack signals the VCU actually uses.
+    TARGET_NODE = "VCU_F7"
 
-    # Generate header
+    class FilteredMsg:
+        """Thin wrapper around a cantools Message with a filtered signal list."""
+        def __init__(self, m, sigs):
+            self.name     = m.name
+            self.frame_id = m.frame_id
+            self.length   = m.length
+            self.signals  = sigs
+
+    vcu_messages = []       # List of messages to generate code for
+    total_sigs_dropped = 0  # Count of signals filtered because not received by VCU_F7
+    for msg in unique_messages:
+        vcu_sigs = [s for s in msg.signals if TARGET_NODE in s.receivers]
+        if not vcu_sigs:
+            continue
+        dropped = len(msg.signals) - len(vcu_sigs)
+        total_sigs_dropped += dropped
+        if dropped:
+            vcu_messages.append(FilteredMsg(msg, vcu_sigs))
+        else:
+            vcu_messages.append(msg)
+
+    skipped = len(unique_messages) - len(vcu_messages)
+    total_signals = sum(len(m.signals) for m in vcu_messages)
+    print(f"Kept {len(vcu_messages)} messages received by {TARGET_NODE} "
+          f"(skipped {skipped})")
+    print(f"Dropped {total_sigs_dropped} signals not received by {TARGET_NODE}")
+    print(f"Total: {len(vcu_messages)} messages, {total_signals} signals")
+
+    # Collect all unique enums across all messages (avoid duplicates for
+    # shared value tables like DC_Channel used by multiple PDU signals)
+    seen_enums = set()
+
+    # ── Generate header ───────────────────────────────────────────────────
     guard = "CAN_SIGNALS_H"
     h_lines = [
         f"#ifndef {guard}",
         f"#define {guard}",
         "",
-        "/* Auto-generated by generate_can_signals.py -- do not edit manually. */",
-        "/* Re-run the script after any DBC change and commit the output.      */",
+        "/* Auto-generated by generate_can_signals.py — do not edit manually. */",
+        "/* Re-run after any DBC change and commit the output.                */",
         "",
         "#include <stdint.h>",
         "#include <string.h>",
+        "#include \"can.h\"        /* hcan3 */",
+        "#include \"hil_can.h\"    /* HIL_CAN_Transmit */",
         "",
+        "/* ── Message ID defines ───────────────────────────────────────────── */",
     ]
-    h_lines += generate_id_defines(unique_messages)
+    for msg in vcu_messages:
+        h_lines.append(generate_id_define(msg))
+
     h_lines += [
         "",
+        "/* ── Value table enums ────────────────────────────────────────────── */",
+    ]
+    for msg in vcu_messages:
+        for sig in msg.signals:
+            if sig.choices and sig.name not in seen_enums:
+                seen_enums.add(sig.name)
+                enum_str = generate_enum(sig)
+                if enum_str:
+                    h_lines.append(enum_str)
+
+    h_lines += [
+        "/* ── Function prototypes ──────────────────────────────────────────── */",
         "#ifdef __cplusplus",
         'extern "C" {',
         "#endif",
         "",
-        "/* Encode function prototypes */",
     ]
-    for msg in unique_messages:
-        h_lines.append(generate_header_decl(msg))
+    for msg in vcu_messages:
+        h_lines.append(generate_encode_decl(msg))
+        h_lines.append(generate_send_decl(msg))
+        h_lines.append("")
+
     h_lines += [
-        "",
         "#ifdef __cplusplus",
         "}",
         "#endif",
@@ -272,16 +393,20 @@ def main():
     out_h.write_text("\n".join(h_lines) + "\n")
     print(f"Written: {out_h}")
 
-    # Generate source
+    # ── Generate source ───────────────────────────────────────────────────
     c_lines = [
-        "/* Auto-generated by generate_can_signals.py -- do not edit manually. */",
-        "/* Re-run the script after any DBC change and commit the output.      */",
+        "/* Auto-generated by generate_can_signals.py — do not edit manually. */",
+        "/* Re-run after any DBC change and commit the output.                */",
         "",
         f'#include "{out_h.name}"',
         "",
     ]
-    for msg in unique_messages:
+    for msg in vcu_messages:
+        c_lines.append(f"/* ── {msg.name} ── */")
+        c_lines.append(generate_struct(msg))
         c_lines.append(generate_encode_fn(msg))
+        c_lines.append("")
+        c_lines.append(generate_send_fn(msg))
         c_lines.append("")
 
     out_c = Path(args.out_c)
@@ -289,15 +414,15 @@ def main():
     out_c.write_text("\n".join(c_lines) + "\n")
     print(f"Written: {out_c}")
 
-    # Summary
-    mux_count = sum(
-        1 for m in unique_messages
-        for s in m.signals if s.multiplexer_ids
+    mux_skipped = sum(
+        1 for m in vcu_messages for s in m.signals if s.multiplexer_ids
     )
+    enum_count = len(seen_enums)
     print(f"\nSummary:")
-    print(f"  {len(unique_messages)} encode functions generated")
-    print(f"  {mux_count} multiplexed signals skipped (fixed non-mux frames only)")
-    print(f"  All signals are little-endian (verified from DBC)")
+    print(f"  {len(vcu_messages)} messages")
+    print(f"  {mux_skipped} mux-conditional signals excluded from encode params")
+    print(f"  {enum_count} value table enums generated")
+    print(f"  Struct-based packing (matches UWFE generateCANHeader.py)")
 
 
 if __name__ == "__main__":
