@@ -56,7 +56,7 @@ void MX_CAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN1_Init 2 */
-
+  
   /* USER CODE END CAN1_Init 2 */
 
 }
@@ -120,6 +120,40 @@ void MX_CAN3_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN3_Init 2 */
+  // CAN filter config, 
+  CAN_FilterTypeDef canFilter = {0};
+  canFilter.FilterBank           = 0;
+  canFilter.FilterMode           = CAN_FILTERMODE_IDMASK;
+  canFilter.FilterScale          = CAN_FILTERSCALE_32BIT;
+  canFilter.FilterIdHigh         = 0x0000;
+  canFilter.FilterIdLow          = 0x0000;
+  canFilter.FilterMaskIdHigh     = 0x0000;
+  canFilter.FilterMaskIdLow      = 0x0000;
+  canFilter.FilterFIFOAssignment = CAN_RX_FIFO0;
+  canFilter.FilterActivation     = ENABLE;
+  if (HAL_CAN_ConfigFilter(&hcan3, &canFilter) != HAL_OK)
+      Error_Handler();
+
+  if (HAL_CAN_ConfigFilter(&hcan3, &canFilter) != HAL_OK)
+  {
+      Error_Handler();
+  }
+
+  // Start CAN peripheral
+  if (HAL_CAN_Start(&hcan3) != HAL_OK)
+  {
+      Error_Handler();
+  }
+
+  // Activate RX notifications for BOTH FIFOs (from F7_canStart() in userCanF7.c in firmware repo)
+  if (HAL_CAN_ActivateNotification(&hcan3, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
+  {
+      Error_Handler();
+  }
+  if (HAL_CAN_ActivateNotification(&hcan3, CAN_IT_RX_FIFO1_MSG_PENDING) != HAL_OK)
+  {
+      Error_Handler();
+  }
 
   /* USER CODE END CAN3_Init 2 */
 
