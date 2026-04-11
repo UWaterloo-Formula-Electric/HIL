@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "cmsis_os.h"
 #include "can.h"
 #include "dac.h"
 #include "i2c.h"
@@ -48,6 +47,24 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+CAN_HandleTypeDef hcan1;
+CAN_HandleTypeDef hcan2;
+CAN_HandleTypeDef hcan3;
+
+DAC_HandleTypeDef hdac;
+
+I2C_HandleTypeDef hi2c1;
+I2C_HandleTypeDef hi2c2;
+I2C_HandleTypeDef hi2c3;
+
+SPI_HandleTypeDef hspi4;
+SPI_HandleTypeDef hspi5;
+
+TIM_HandleTypeDef htim8;
+
+UART_HandleTypeDef huart4;
+UART_HandleTypeDef huart7;
+UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
 
@@ -56,7 +73,6 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MPU_Config(void);
-void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -112,16 +128,8 @@ int main(void)
   MX_UART7_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  
   /* USER CODE END 2 */
-
-  /* Call init function for freertos objects (in cmsis_os2.c) */
-  MX_FREERTOS_Init();
-
-  /* Start scheduler */
-  osKernelStart();
-
-  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -218,27 +226,6 @@ void MPU_Config(void)
   /* Enables the MPU */
   HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
 
-}
-
-/**
-  * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM1 interrupt took place, inside
-  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
-  * a global variable "uwTick" used as application time base.
-  * @param  htim : TIM handle
-  * @retval None
-  */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-  /* USER CODE BEGIN Callback 0 */
-
-  /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM1) {
-    HAL_IncTick();
-  }
-  /* USER CODE BEGIN Callback 1 */
-
-  /* USER CODE END Callback 1 */
 }
 
 /**
