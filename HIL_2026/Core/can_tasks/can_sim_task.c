@@ -36,7 +36,7 @@ void canSimTask(void const *argument)
         {
             // Drain on-demand frames from CLI
             HIL_CanCmd_t cmd;
-            while (osMessageGet(xCanTxQueue, &cmd, 0) == osOK)
+            while (osMessageGet(xCanTxQueue, /*&cmd,*/ 0) == osOK)
                 HIL_CAN_Transmit(&hcan3, cmd.extId, cmd.length, cmd.data);
 
             // 10 ms periodic sends

@@ -28,12 +28,11 @@ Dependencies
 """
 
 import cantools
-import argparse
 import operator
 from pathlib import Path
 
 
-# Type helpers
+# ── Type helpers ──────────────────────────────────────────────────────────
 
 def raw_c_type(signal):
     """C integer type for the signal's raw (unscaled) value inside the struct."""
@@ -50,7 +49,7 @@ def phys_c_type(signal):
     return "uint64_t"
 
 
-# Struct generation (matches UWFE writeStructForMsg)
+# ── Struct generation (matches UWFE writeStructForMsg) ────────────────────
 
 def generate_struct(msg):
     """
@@ -246,50 +245,20 @@ def generate_id_define(msg):
     )
 
 
+# ── Configuration — update these paths if files move ──────────────────────
+
+DBC_PATH = r"C:\Users\Joeyl\OneDrive\Desktop\Coding Projects\UWFE\HIL\HIL_2026\Data\2024CAR.dbc"
+
+OUT_C = r"C:\Users\Joeyl\OneDrive\Desktop\Coding Projects\UWFE\HIL\HIL_2026\Core\Src\can_signals.c"
+OUT_H = r"C:\Users\Joeyl\OneDrive\Desktop\Coding Projects\UWFE\HIL\HIL_2026\Core\Inc\can_signals.h"
+
 # ── Main ──────────────────────────────────────────────────────────────────
 
-# Default DBC directory — update this if your Data folder moves
-DEFAULT_DBC_DIR = r"C:\Users\Joeyl\OneDrive\Desktop\Coding Projects\UWFE\HIL\HIL_2026\Data"
-
-# DBC files to load by default when no paths are provided on the command line
-DEFAULT_DBC_FILE = "2024CAR.dbc"
-
-
-
 def main():
-    import os
-
-    parser = argparse.ArgumentParser(
-        description="Generate HIL CAN encode/send functions from DBC files (VCU_F7 RX only)."
-    )
-    parser.add_argument(
-        "dbc", nargs="*",
-        help=(
-            "DBC file paths. If omitted, defaults to 2024CAR.dbc and "
-            "ChargerMessages.dbc in the configured DEFAULT_DBC_DIR."
-        )
-    )
-    parser.add_argument("--out-c", default="can_signals.c")
-    parser.add_argument("--out-h", default="can_signals.h")
-    parser.add_argument(
-        "--dbc-dir", default=DEFAULT_DBC_DIR,
-        help="Directory containing DBC files (used when no dbc args are given)"
-    )
-    args = parser.parse_args()
-
-    # If no DBC files given on command line, use the defaults from DEFAULT_DBC_DIR
-    if not args.dbc:
-        args.dbc = [
-            os.path.join(args.dbc_dir, DEFAULT_DBC_FILE)
-        ]
-        print(f"No DBC files specified — using defaults from: {args.dbc_dir}")
-
     # Load and merge all DBC files
-    all_messages = []
-    for dbc_path in args.dbc:
-        db = cantools.database.load_file(dbc_path)
-        all_messages.extend(db.messages)
-        print(f"Loaded {dbc_path}: {len(db.messages)} messages")
+    db = cantools.database.load_file(DBC_PATH)
+    all_messages = db.messages
+    print(f"Loaded {DBC_PATH}: {len(db.messages)} messages")
 
     # Deduplicate by frame_id
     seen_ids = set()
@@ -313,8 +282,8 @@ def main():
             self.length   = m.length
             self.signals  = sigs
 
-    vcu_messages = []       # List of messages to generate code for
-    total_sigs_dropped = 0  # Count of signals filtered because not received by VCU_F7
+    vcu_messages = []
+    total_sigs_dropped = 0
     for msg in unique_messages:
         vcu_sigs = [s for s in msg.signals if TARGET_NODE in s.receivers]
         if not vcu_sigs:
@@ -388,9 +357,9 @@ def main():
         f"#endif /* {guard} */",
     ]
 
-    out_h = Path(args.out_h)
+    out_h = Path(OUT_H)
     out_h.parent.mkdir(parents=True, exist_ok=True)
-    out_h.write_text("\n".join(h_lines) + "\n")
+    out_h.write_text("\n".join(h_lines) + "\n", encoding='utf-8') # need to specify encoding to avoid ascii errors on '-' character
     print(f"Written: {out_h}")
 
     # ── Generate source ───────────────────────────────────────────────────
@@ -409,9 +378,9 @@ def main():
         c_lines.append(generate_send_fn(msg))
         c_lines.append("")
 
-    out_c = Path(args.out_c)
+    out_c = Path(OUT_C)
     out_c.parent.mkdir(parents=True, exist_ok=True)
-    out_c.write_text("\n".join(c_lines) + "\n")
+    out_c.write_text("\n".join(c_lines) + "\n", encoding='utf-8')
     print(f"Written: {out_c}")
 
     mux_skipped = sum(
