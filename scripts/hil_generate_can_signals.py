@@ -178,7 +178,10 @@ def generate_encode_fn(msg):
         elif offset == 0:
             raw_expr = f"({raw_c_type(s)})(({s.name}) / ({scale}f))"
         else:
-            raw_expr = f"({raw_c_type(s)})((({s.name}) - ({offset}f)) / ({scale}f))"
+            if isinstance(offset, int): # if offset is an int, add .0 to ensure float division in C
+                raw_expr = f"({raw_c_type(s)})((({s.name}) - ({offset}.0f)) / ({scale}f))" 
+            else:
+                raw_expr = f"({raw_c_type(s)})((({s.name}) - ({offset}f)) / ({scale}f))"
 
         lines.append(f"    frame.{s.name} = {raw_expr};")
 
@@ -318,7 +321,6 @@ def main():
         "#include <stdint.h>",
         "#include <string.h>",
         "#include \"can.h\"        /* hcan3 */",
-        "#include \"hil_can.h\"    /* HIL_CAN_Transmit */",
         "",
         "/* ── Message ID defines ───────────────────────────────────────────── */",
     ]

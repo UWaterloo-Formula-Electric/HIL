@@ -40,16 +40,16 @@ void canSimTask(void const *argument)
                 HIL_CAN_Transmit(&hcan3, cmd.extId, cmd.length, cmd.data);
 
             // 10 ms periodic sends
-            send_MC_Internal_States();
-            send_WSB_Speeds();
+            sendCAN_MC_Internal_States();
+            sendCAN_WSBRL_Speed();
 
             // 100 ms periodic sends (every 10th tick)
             static uint8_t slow = 0;
             if (++slow >= 10) {
                 slow = 0;
-                send_BMU_stateBatteryHV();
-                send_PrechargeState();
-                send_PDU_Car_State();
+                sendCAN_BMU_stateBatteryHV();
+                sendCAN_PrechargeState();
+                sendCAN_PDU_Car_State();
             }
         }
         // MODE_LOG: yield, canLogTask drives the bus

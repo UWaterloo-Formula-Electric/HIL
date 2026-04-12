@@ -135,46 +135,46 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the thread(s) */
   /* definition and creation of defaultTask */
-  osThreadDef(StartDefaultTask, osPriorityNormal, 0, 256);
-  defaultTaskHandle = osThreadCreate(osThread(StartDefaultTask), NULL);
+  // osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 256);
+  // defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
-  osThreadDef(canSimTask, osPriorityRealtime, 0, 1000);
+  osThreadDef(canSimTask, canSimTask, osPriorityRealtime, 0, 1000);
   canSimTaskHandle = osThreadCreate(osThread(canSimTask), NULL);
 
-  osThreadDef(canLogTask, osPriorityNormal, 0, 2000);
+  osThreadDef(canLogTask, canLogTask, osPriorityNormal, 0, 2000);
   canLogTaskHandle = osThreadCreate(osThread(canLogTask), NULL);
 
-  osThreadDef(hilCliTask, osPriorityLow, 0, 1000);
+  osThreadDef(hilCliTask, hilCliTask, osPriorityLow, 0, 1000);
   cliTaskHandle = osThreadCreate(osThread(hilCliTask), NULL);
 
-  osThreadDef(outputTask, osPriorityNormal, 0, 500);
+  osThreadDef(outputTask, outputTask, osPriorityNormal, 0, 500);
   outputTaskHandle = osThreadCreate(osThread(outputTask), NULL);
 
-  osThreadDef(logDrainTask, osPriorityLow, 0, 500);
+  osThreadDef(logDrainTask, logDrainTask, osPriorityLow, 0, 500);
   logDrainTaskHandle = osThreadCreate(osThread(logDrainTask), NULL);
   /* USER CODE END RTOS_THREADS */
 
 }
 
-/* USER CODE BEGIN Header_StartDefaultTask */
-/**
-  * @brief  Function implementing the defaultTask thread.
-  * @param  argument: Not used
-  * @retval None
-  */
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void const * argument)
-{
-  /* USER CODE BEGIN StartDefaultTask */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END StartDefaultTask */
-}
+// /* USER CODE BEGIN Header_StartDefaultTask */
+// /**
+//   * @brief  Function implementing the defaultTask thread.
+//   * @param  argument: Not used
+//   * @retval None
+//   */
+// /* USER CODE END Header_StartDefaultTask */
+// void StartDefaultTask(void const * argument)
+// {
+//   /* USER CODE BEGIN StartDefaultTask */
+//   /* Infinite loop */
+//   for(;;)
+//   {
+//     osDelay(1);
+//   }
+//   /* USER CODE END StartDefaultTask */
+// }
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
