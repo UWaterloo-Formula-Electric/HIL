@@ -4,7 +4,8 @@
 #include "FreeRTOS.h"
 #include "cmsis_os.h"
 #include <string.h>
-#include <stdlib.h>
+#include <stdio.h>
+#include <stdbool.h>
 
 #define LOG_LINE_MAX 80
 
@@ -49,7 +50,7 @@ void canLogTask(void const *argument)
         }
 
         // Playback loop
-        while (true)
+        while (1)
         {
             osMutexWait(gHILState.mutex, portMAX_DELAY);
             HIL_LogState_t st = gHILState.logState;

@@ -1,13 +1,14 @@
-#include "FreeRTOSConfig.h"
+#include "main.h"      
+#include "FreeRTOS.h"
 #include "task.h"
-#include "cmsis_os.h"
-#include "FreeRTOS_CLI.h"
+#include "cmsis_os.h"   
+#include "can_types.h"   
+#include "can.h"         
 #include "usart.h"
-#include "can_types.h"
-#include "can.h"
+#include "FreeRTOS_CLI.h"
 #include <string.h>
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdbool.h>
 
 static BaseType_t cmd_mode(char *out, size_t len, const char *cmd)
 {
