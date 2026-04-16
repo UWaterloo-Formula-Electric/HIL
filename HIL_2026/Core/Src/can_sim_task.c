@@ -36,20 +36,45 @@ void canSimTask(void const *argument)
         {
             // Drain on-demand frames from CLI
             HIL_CanCmd_t cmd;
-            while (osMessageGet(xCanTxQueue, /*&cmd,*/ 0) == osOK)
+            while (osMessageGet(xCanTxQueue, /*&cmd,*/ 0).status == osOK)
                 HIL_CAN_Transmit(&hcan3, cmd.extId, cmd.length, cmd.data);
 
             // 10 ms periodic sends
-            sendCAN_MC_Internal_States();
-            sendCAN_WSBRL_Speed();
+            sendCAN_MC_Internal_States(
+                gHILState.invVsmState,      // INV_VSM_State
+                0,                          // INV_PWM_Frequency
+                gHILState.invState,         // INV_Inverter_State
+                1, 0, 0, 0, 0, 0,          // Relay 1-6
+                0, 0, 0, 0, 0,             // Run mode, self sensing, discharge, cmd mode, rolling counter
+                gHILState.invEnableState,   // INV_Inverter_Enable_State
+                0, 1,                       // Burst model, key switch
+                gHILState.invEnableLockout, // INV_Inverter_Enable_Lockout
+                1,                          // Direction forward
+                1,                          // BMS active
+                0, 0, 0, 0, 0, 0           // All limit flags off
+            );
+            sendCAN_WSBRL_Speed(
+                gHILState.rlSpeedKPH_x100 / KPH2RAW,       // RLSpeedRPM — raw value, scale=1
+                gHILState.rlSpeedKPH_x100        // RLSpeedKPH — physical kph, scale=0.04
+            );
 
             // 100 ms periodic sends (every 10th tick)
             static uint8_t slow = 0;
             if (++slow >= 10) {
                 slow = 0;
-                sendCAN_BMU_stateBatteryHV();
-                sendCAN_PrechargeState();
-                sendCAN_PDU_Car_State();
+                sendCAN_BMU_stateBatteryHV(
+                    gHILState.packVoltageMV,   // packVoltageMV
+                    gHILState.packCurrentMA,   // packCurrentMA
+                    gHILState.prechargeState   // prechargeState
+                );
+                sendCAN_PrechargeState(
+                    gHILState.prechargeState   // PrechargeState
+                );
+                sendCAN_PDU_Car_State(
+                    gHILState.pduCarStateLV,  // CarStateIsLV
+                    gHILState.pduCarStateEM,  // CarStateIsEM
+                    gHILState.pduCarStateHV   // CarStateIsHV
+                );
             }
         }
         // MODE_LOG: yield, canLogTask drives the bus

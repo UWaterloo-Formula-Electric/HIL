@@ -1,5 +1,5 @@
-#ifndef HIL_TYPES_H
-#define HIL_TYPES_H
+#ifndef CAN_TYPES_H
+#define CAN_TYPES_H
 
 #include "stm32f7xx_hal.h"
 #include "cmsis_os.h"
@@ -80,6 +80,8 @@ typedef struct {
     osMutexId mutex;
 } HIL_VehicleState_t;
 
+#define KPH2RAW 0.04f
+
 extern HIL_VehicleState_t gHILState;
 extern osMessageQId       xCanTxQueue;
 extern osMessageQId       xOutputQueue;
@@ -87,4 +89,4 @@ extern HIL_RxLogEntry_t   logRing[];
 extern volatile uint32_t  logRingHead;
 extern volatile uint32_t  logRingTail;
 
-#endif /* HIL_TYPES_H */
+#endif /* CAN_TYPES_H */
