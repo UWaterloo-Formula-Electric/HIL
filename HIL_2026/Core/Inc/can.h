@@ -50,6 +50,13 @@ void MX_CAN3_Init(void);
 void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle);
 void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle);
 
+HAL_StatusTypeDef HIL_CAN_Transmit(CAN_HandleTypeDef *hcan,
+                                    uint32_t id, uint8_t length,
+                                    uint8_t *data);
+
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan);
+void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan);
+
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

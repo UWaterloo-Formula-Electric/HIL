@@ -21,7 +21,8 @@
 #include "can.h"
 
 /* USER CODE BEGIN 0 */
-
+/* User Includes ------------------------------------------------------------------*/
+#include "can_types.h"
 /* USER CODE END 0 */
 
 CAN_HandleTypeDef hcan1;
@@ -56,7 +57,7 @@ void MX_CAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN1_Init 2 */
-
+  
   /* USER CODE END CAN1_Init 2 */
 
 }
@@ -120,6 +121,40 @@ void MX_CAN3_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN3_Init 2 */
+  // CAN filter config, 
+  CAN_FilterTypeDef canFilter = {0};
+  canFilter.FilterBank           = 0;
+  canFilter.FilterMode           = CAN_FILTERMODE_IDMASK;
+  canFilter.FilterScale          = CAN_FILTERSCALE_32BIT;
+  canFilter.FilterIdHigh         = 0x0000;
+  canFilter.FilterIdLow          = 0x0000;
+  canFilter.FilterMaskIdHigh     = 0x0000;
+  canFilter.FilterMaskIdLow      = 0x0000;
+  canFilter.FilterFIFOAssignment = CAN_RX_FIFO0;
+  canFilter.FilterActivation     = ENABLE;
+  if (HAL_CAN_ConfigFilter(&hcan3, &canFilter) != HAL_OK)
+      Error_Handler();
+
+  if (HAL_CAN_ConfigFilter(&hcan3, &canFilter) != HAL_OK)
+  {
+      Error_Handler();
+  }
+
+  // Start CAN peripheral
+  if (HAL_CAN_Start(&hcan3) != HAL_OK)
+  {
+      Error_Handler();
+  }
+
+  // Activate RX notifications for BOTH FIFOs (from F7_canStart() in userCanF7.c in firmware repo)
+  if (HAL_CAN_ActivateNotification(&hcan3, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
+  {
+      Error_Handler();
+  }
+  if (HAL_CAN_ActivateNotification(&hcan3, CAN_IT_RX_FIFO1_MSG_PENDING) != HAL_OK)
+  {
+      Error_Handler();
+  }
 
   /* USER CODE END CAN3_Init 2 */
 
@@ -293,5 +328,61 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
 }
 
 /* USER CODE BEGIN 1 */
+HAL_StatusTypeDef HIL_CAN_Transmit(CAN_HandleTypeDef *hcan,
+                                    uint32_t id, uint8_t length,
+                                    uint8_t *data)
+{
+    CAN_TxHeaderTypeDef txHeader = {0};
+    uint32_t txMailbox;
+
+    if (length > 8) return HAL_ERROR;
+
+    txHeader.ExtId              = id;
+    txHeader.RTR                = CAN_RTR_DATA;
+    txHeader.IDE                = CAN_ID_EXT;   // UWFE uses extended IDs only
+    txHeader.DLC                = length;
+    txHeader.TransmitGlobalTime = DISABLE;
+
+    if (HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0)
+        return HAL_ERROR;
+
+    return HAL_CAN_AddTxMessage(hcan, &txHeader, data, &txMailbox);
+}
+
+// ── RX callbacks — write to ring buffer only ─────────────────
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+{
+    CAN_RxHeaderTypeDef rxHeader;
+    uint8_t rxData[8];
+
+    if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &rxHeader, rxData) != HAL_OK)
+        return;
+
+    uint32_t nextHead = (logRingHead + 1) % LOG_RING_SIZE;
+    if (nextHead == logRingTail) return;  // ring full, drop frame
+
+    HIL_RxLogEntry_t *e = &logRing[logRingHead];
+    e->timestamp_ms = HAL_GetTick();
+    e->id  = (rxHeader.IDE == CAN_ID_EXT) ? rxHeader.ExtId : rxHeader.StdId;
+    e->dlc = (uint8_t)rxHeader.DLC;
+    for (uint8_t i = 0; i < rxHeader.DLC; i++) e->data[i] = rxData[i];
+    logRingHead = nextHead;
+}
+
+void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
+{
+    uint32_t nextHead = (logRingHead + 1) % LOG_RING_SIZE;
+    if (nextHead == logRingTail) return;
+    HIL_RxLogEntry_t *e = &logRing[logRingHead];
+    e->timestamp_ms = HAL_GetTick();
+    e->id  = 0xFFFFFFFF;  // sentinel: error entry
+    e->dlc = 4;
+    uint32_t err = hcan->ErrorCode;
+    e->data[0] = (err >> 24) & 0xFF;
+    e->data[1] = (err >> 16) & 0xFF;
+    e->data[2] = (err >>  8) & 0xFF;
+    e->data[3] = (err      ) & 0xFF;
+    logRingHead = nextHead;
+}
 
 /* USER CODE END 1 */

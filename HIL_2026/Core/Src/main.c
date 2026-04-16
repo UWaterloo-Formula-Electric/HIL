@@ -56,6 +56,7 @@
 void SystemClock_Config(void);
 static void MPU_Config(void);
 /* USER CODE BEGIN PFP */
+__weak void userInit() {}
 
 /* USER CODE END PFP */
 
@@ -110,7 +111,7 @@ int main(void)
   MX_UART7_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  
   /* USER CODE END 2 */
 
   /* Infinite loop */
