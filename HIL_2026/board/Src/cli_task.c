@@ -137,15 +137,42 @@ static BaseType_t cmd_can(char *out, size_t len, const char *cmd)
 }
 
 static const CLI_Command_Definition_t xCmds[] = {
-    { cmd_mode,   "mode",   "mode cli|log\r\n",               1 },
-    { cmd_log,    "log",    "log start|pause|resume|exit\r\n", 1 },
-    { cmd_state,  "state",  "state lv|hv|em|running\r\n",     1 },
-    { cmd_bmu,    "bmu",    "bmu <signal> <val>\r\n",          2 },
-    { cmd_speed,  "speed",  "speed <rr_kph> <rl_kph>\r\n",    2 },
-    { cmd_can,    "can",    "can <id_hex> <data_hex...>\r\n",  2 },
-    // { cmd_gpio,   "gpio",   "gpio <port> <pin> <0|1>\r\n",     3 },
-    // { cmd_dac,    "dac",    "dac <ch> <0-4095>\r\n",           2 },
-    // { cmd_status, "status", "status\r\n",                       0 },
+    {
+        "mode",                     // pcCommand — what the user types
+        "mode cli|log\r\n",         // pcHelpString — shown by 'help'
+        cmd_mode,                   // pxCommandInterpreter — function pointer
+        1                           // cExpectedNumberOfParameters
+    },
+    {
+        "log",
+        "log start|pause|resume|exit\r\n",
+        cmd_log,
+        1
+    },
+    {
+        "state",
+        "state lv|hv|em|running\r\n",
+        cmd_state,
+        1
+    },
+    {
+        "bmu",
+        "bmu <signal> <val>\r\n",
+        cmd_bmu,
+        2
+    },
+    {
+        "speed",
+        "speed <rr_kph> <rl_kph>\r\n",
+        cmd_speed,
+        2
+    },
+    {
+        "can",
+        "can <id_hex> <data_hex...>\r\n",
+        cmd_can,
+        2
+    },
 };
 
 void hilCliTask(void const *argument)
